@@ -14,36 +14,20 @@ class ToChoices(Layer):
     def call(self, inputs): # reals, fakes, shuffle indices
         reals, fakes, shuffle_indices = inputs
         choice_images = tf.stack((fakes, reals), axis=-2)
-        # TODO: the problem is that shuffle_indices is of shape batch size, what we need is an index for choice rather than batch item
-        # TODO: so shuffle_indices should be 2D, one axis for which one in batch and one for the ordering of choices
-        # TODO: shuffle_indices is now indexed by batch then by ordering of choices, so now we just need to get it to
-        # TODO: shuffle along the right axis
         shuffle_indices = tf.cast(shuffle_indices, dtype=tf.int64)
-        #choice_images = tf.gather(choice_images, shuffle_indices, axis=3)
-        #choice_images = tf.map_fn(, tf.stack((choice_images, shuffle_indices)
         def apply_gather(x):
             indices = x[1,0,0,:,0]
-            return tf.gather(x, tf.cast(indices, tf.int32), axis=-2) # TODO: something's not right here based on https://stackoverflow.com/questions/55597335/how-to-use-tf-gather-in-batch
-        # TODO: output dimension is clearly messed up
+            return tf.gather(x, tf.cast(indices, tf.int32), axis=-2)
         choice_images = tf.cast(choice_images, dtype=tf.float32)
         shuffle_indices = tf.cast(shuffle_indices, dtype=tf.float32)
-        #expanded_shuffle_indices = tf.identity(choice_images) #tf.zeros(shape=choice_images.shape)
-        #expanded_shuffle_indices = tf.map_fn(lambda i: tf.fill(dims=expanded_shuffle_indices.shape[1:], value=i[0]), shuffle_indices)
         for i in fakes.shape[1:-1]:
             shuffle_indices = tf.stack([shuffle_indices for _ in range(i)], axis=1)#tf.tile(shuffle_indices, tf.expand_dims(i, axis=0))
         shuffle_indices = tf.stack([shuffle_indices for _ in range(fakes.shape[-1])], axis=-1)
-        # for _ in range(2):
-        #     shuffle_indices = tf.expand_dims(shuffle_indices, axis=-1)
         stacked = tf.stack([choice_images, shuffle_indices], axis=1)
-        #stacked = tf.stack([choice_images, expanded_shuffle_indices], axis=1)
-        # TODO: it's working great up to here and indices are stacked with choices on first non-batch axis, so just pick
-        # TODO: up from here, try to rewrite the apply_gather function to gather the choices in the order given by the indices
-        stacked = tf.ensure_shape(stacked, shape=(32, 2, 28, 28, 2, 1))
+        #stacked = tf.ensure_shape(stacked, shape=(32, 2, 28, 28, 2, 1))
         gathered = tf.map_fn(apply_gather, stacked)
         gathered = gathered[:,0]
         choice_images = tf.stack(gathered, axis=0)
-
-        #choice_images = tf.squeeze(choice_images, axis=-2)
         #choice_images = tf.ensure_shape(choice_images, shape=self.compute_output_shape((i.shape for i in inputs))) # TODO: uncomment
         return choice_images
 
@@ -58,6 +42,27 @@ class ToChoices(Layer):
     def ensure_batch_size(self, input):
         return tf.concat(tf.constant((32,)), (input.shape[1:]))
 
+
+# concatenate a batch of images with their batch of distributions, as extra channels?
+class ConcatWithEncoded(Layer):
+    def call(self, inputs):  # images, encoded
+        images, encoded = inputs
+        # TODO: fix
+        images, encoded = tf.ensure_shape(images, (32, 28, 28, 1)), tf.ensure_shape(encoded, (32, 100))
+        #images, encoded = tf.ensure_shape(images, shape=self.ensure_batch_size(images)), tf.ensure_shape(encoded, shape=self.ensure_batch_size(encoded))
+        encoded = tf.expand_dims(tf.expand_dims(encoded, axis=-2), axis=-2)
+        encoded = tf.tile(encoded, (1,) + images.shape[1:])
+        output = tf.concat([images, encoded], axis=-1)
+        return output
+
+    def compute_output_shape(self, input_shapes): # images, encoded
+        images_shape, encoded_shape = input_shapes
+        output_shape = images_shape[:-1].concatenate(encoded_shape[-1] + images_shape[-1])
+
+    # TODO: this sucks
+    @tf.function
+    def ensure_batch_size(self, input):
+        return tf.concat((tf.constant((32,)), input.shape[1:]), axis=0)
 
 # TODO: just copy pasted this from online make it nice, and maybe we can use it
 class SpectralNorm(Layer):

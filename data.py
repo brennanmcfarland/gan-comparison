@@ -56,7 +56,7 @@ class DataProvider(Sequence):
             # normalize channel values
             batch_y[i] = img_downscaled
             batch_y[i] /= 255.0
-        return np.random.uniform(size=(batch_size, 100)), np.expand_dims(batch_y, axis=3)
+        return np.random.uniform(size=(batch_size, 100), low=-255, high=255), np.expand_dims(batch_y, axis=3)
 
     def get_image(self, metadata, datum_index):
         metadatum = metadata[datum_index]

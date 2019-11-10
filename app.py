@@ -30,6 +30,24 @@ def test_gan(gan_type, g_input, g_output, d_input, d_output, epochs=3, verbose=F
     gan_model.train(epochs, data_train, data_test, verbose=verbose)
 
 
+def test_vegan(gan_type, g_input, g_output, e_input, e_output, d_input, d_output, epochs=3, verbose=False):
+    # we have to reinstantiate the generator and discriminator or the weights won't be reset
+    generator = Model(g_input, g_output, name='generator')
+    discriminator = Model(d_input, d_output, name='discriminator')
+    encoder = Model(e_input, e_output, name='encoder')
+    gan_model = gan_type(generator, discriminator, encoder)
+    gan_model.num_data = len(metadata)
+    gan_model.compile()
+    data_train = DataProvider(metadata_train)
+    # build a dictionary mapping between name strings and ids
+    data_train.class_to_id = dict((n, i) for i, n in enumerate(classes))
+    data_train.id_to_class = dict((i, n) for i, n in enumerate(classes))
+    data_test = DataProvider(metadata_test)
+    data_test.class_to_id = dict((n, i) for i, n in enumerate(classes))
+    data_test.id_to_class = dict((i, n) for i, n in enumerate(classes))
+    gan_model.train(epochs, data_train, data_test, verbose=verbose)
+
+
 random.seed()
 
 # load data
@@ -42,4 +60,5 @@ metadata_test = metadata[:len(metadata_train)]
 classes = set([datum[0] for datum in metadata])
 num_classes = len(classes)
 
-test_gan(ChoiceGAN, *choicegan_submodel(), epochs=100, verbose=True)
+#test_gan(ChoiceGAN, *choicegan_submodel(), epochs=100, verbose=True)
+test_vegan(DistributionalVEGAN, *distributional_autoencoder_submodel(), epochs=100, verbose=True)
